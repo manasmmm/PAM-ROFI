@@ -1,0 +1,163 @@
+# =============================================================================
+# PAM-ROFI configuration
+# Everything the pipeline needs lives here, so nothing is hard-coded in code.
+# =============================================================================
+
+# Google Earth Engine cloud project. The env var PAMROFI_EE_PROJECT overrides it.
+ee_project: "smooth-zenith-500010-i8"
+
+# -----------------------------------------------------------------------------
+# Regions of interest. The app lets you pick one of these, upload a GeoJSON,
+# or type any Indian district name (looked up in FAO GAUL level-2).
+# -----------------------------------------------------------------------------
+default_roi: meerut_pilot
+rois:
+  meerut_pilot:
+    label: "Meerut pilot block (original KML, ~2 km²)"
+    type: polygon
+    coordinates:
+      - [77.67537198747675, 29.11178858904646]
+      - [77.69460753840237, 29.11175875932175]
+      - [77.69464550057957, 29.12221525662682]
+      - [77.675442471587, 29.12227700386805]
+      - [77.67537198747675, 29.11178858904646]
+  meerut_buffer_10km:
+    label: "Meerut pilot + 10 km buffer (recommended demo size)"
+    type: buffer
+    center: [77.685, 29.117]
+    radius_m: 10000
+  meerut_district:
+    label: "Meerut district (FAO GAUL)"
+    type: district
+    state: "Uttar Pradesh"
+    district: "Meerut"
+
+# -----------------------------------------------------------------------------
+# Seasons. Each season defines its window, classes, and FAO-56 crop parameters.
+#
+# sowing_method:
+#   vh_min    – transplanting date = date of minimum Sentinel-1 VH backscatter
+#               inside sowing_search (flooded paddy fields look dark in VH)
+#   ndvi_sos  – start of season = first date NDVI rises above
+#               min + sos_fraction * (max - min); sowing = SOS - emergence_lag_days
+#   fixed     – crop planted before the window (e.g. sugarcane); uses fixed_sowing
+#
+# Kc curve (FAO-56 4-stage): kc_ini, kc_mid, kc_end and stage lengths in days.
+# -----------------------------------------------------------------------------
+default_season: kharif_2025
+seasons:
+  kharif_2025:
+    label: "Kharif 2025 (Jun–Nov)"
+    start: "2025-06-01"
+    end: "2025-11-30"
+    composite_days: 10
+    sowing_search: ["2025-06-10", "2025-08-31"]
+    classes:
+      - id: 0
+        name: "Non-agricultural"
+        color: "#5b5b5b"
+        irrigable: false
+      - id: 1
+        name: "Sugarcane"
+        color: "#1b7f3b"
+        irrigable: true
+        sowing_method: fixed
+        fixed_sowing: "2025-02-20"
+        kc: {ini: 0.40, mid: 1.25, end: 0.75}
+        stages: {ini: 35, dev: 60, mid: 180, late: 90}
+      - id: 2
+        name: "Paddy (rice)"
+        color: "#2563eb"
+        irrigable: true
+        sowing_method: vh_min
+        emergence_lag_days: 0
+        kc: {ini: 1.05, mid: 1.20, end: 0.75}
+        stages: {ini: 20, dev: 30, mid: 50, late: 25}
+        percolation_mm_day: 3.0       # puddled-field seepage + percolation loss
+      - id: 3
+        name: "Other kharif crops / fallow"
+        color: "#f59e0b"
+        irrigable: true
+        sowing_method: ndvi_sos
+        sos_fraction: 0.35
+        emergence_lag_days: 12
+        fallow_amplitude: 0.20        # NDVI amplitude below this → fallow, no advisory
+        kc: {ini: 0.30, mid: 1.15, end: 0.50}
+        stages: {ini: 20, dev: 35, mid: 40, late: 30}
+
+  rabi_2025_26:
+    label: "Rabi 2025–26 (Nov–Apr)"
+    start: "2025-11-01"
+    end: "2026-04-30"
+    composite_days: 10
+    sowing_search: ["2025-11-01", "2025-12-31"]
+    classes:
+      - id: 0
+        name: "Non-agricultural"
+        color: "#5b5b5b"
+        irrigable: false
+      - id: 1
+        name: "Sugarcane"
+        color: "#1b7f3b"
+        irrigable: true
+        sowing_method: fixed
+        fixed_sowing: "2025-02-20"
+        kc: {ini: 0.40, mid: 1.25, end: 0.75}
+        stages: {ini: 35, dev: 60, mid: 180, late: 90}
+      - id: 2
+        name: "Wheat"
+        color: "#d4a017"
+        irrigable: true
+        sowing_method: ndvi_sos
+        sos_fraction: 0.35
+        emergence_lag_days: 10
+        kc: {ini: 0.30, mid: 1.15, end: 0.30}
+        stages: {ini: 20, dev: 30, mid: 50, late: 30}
+      - id: 3
+        name: "Other rabi crops / fallow"
+        color: "#a855f7"
+        irrigable: true
+        sowing_method: ndvi_sos
+        sos_fraction: 0.35
+        emergence_lag_days: 10
+        fallow_amplitude: 0.20
+        kc: {ini: 0.35, mid: 1.10, end: 0.40}
+        stages: {ini: 20, dev: 30, mid: 40, late: 25}
+
+# -----------------------------------------------------------------------------
+# Classification
+# -----------------------------------------------------------------------------
+classification:
+  # Where labels come from:
+  #   a GEE asset id ("projects/<project>/assets/pamrofi_labels_kharif2025"),
+  #   a local GeoJSON path ("labels/meerut_kharif_2025.geojson"),
+  #   or "weak" to bootstrap from rules (demo only, accuracy is NOT meaningful).
+  labels: "weak"
+  class_property: "class"
+  points_per_polygon: 25
+  test_fraction: 0.3           # split is done on POLYGONS, not pixels → no leakage
+  seed: 42
+  num_trees: 200
+  scale: 10
+
+# -----------------------------------------------------------------------------
+# Moisture stress (Objective 2)
+# -----------------------------------------------------------------------------
+stress:
+  history_years: 4             # years before the season used as VCI/SMI baseline
+  window_days: 8               # evaluation window length
+  fallback_days: 30            # wider optical window if the 8-day one is cloudy
+  vci_severe: 35
+  vci_watch: 60
+  smi_severe: 0.35
+  smi_watch: 0.50
+
+# -----------------------------------------------------------------------------
+# Water balance & advisory (Objective 3)
+# -----------------------------------------------------------------------------
+advisory:
+  period_days: 8
+  et0_source: "hargreaves_era5"   # or "modis_pet" (MOD16A2GF PET band)
+  rain_source: "chirps"           # or "era5"
+  effective_rain_factor: 0.8      # fraction of rain that reaches the root zone
+  thresholds_mm: [10, 30]         # <10 none, 10–30 routine (3–4 days), >30 immediate

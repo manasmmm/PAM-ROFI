@@ -1,0 +1,9 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {"type": "Feature", "properties": {"class": 2, "class_name": "paddy"},
+     "geometry": {"type": "Polygon", "coordinates": [[[77.680, 29.115], [77.681, 29.115], [77.681, 29.116], [77.680, 29.116], [77.680, 29.115]]]}},
+    {"type": "Feature", "properties": {"class": 1, "class_name": "sugarcane"},
+     "geometry": {"type": "Point", "coordinates": [77.686, 29.118]}}
+  ]
+}

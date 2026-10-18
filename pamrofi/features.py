@@ -74,7 +74,9 @@ class SeasonCube:
     def _build_composites(self) -> ee.ImageCollection:
         n_days = self.end.difference(self.start, "day")
         offsets = ee.List.sequence(0, n_days.subtract(1), self.step)
-        return ee.ImageCollection(offsets.map(self._composite))
+        # EE inspects the callback signature, so a bound method (with `self`) is
+        # rejected; wrap it in a plain one-argument function.
+        return ee.ImageCollection(offsets.map(lambda offset: self._composite(offset)))
 
     # ---------------------------------------------------------- feature stack
     def temporal_stack(self) -> ee.Image:

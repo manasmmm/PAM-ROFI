@@ -57,3 +57,18 @@ def test_kc_expression_is_valid_text(fake_ee):
         tokens = e.replace("?", " ").replace(":", " ").replace("(", " ").replace(")", " ")
         for tok in tokens.split():
             assert tok in {"D", "<", "<=", "+", "-", "*"} or float(tok) is not None
+
+
+def test_no_bound_methods_passed_to_ee_map():
+    """Earth Engine wraps map() callbacks by inspecting their signature; a bound
+    method exposes `self` and fails with 'takes 2 positional arguments but 3
+    were given'. Callbacks must be plain functions or lambdas."""
+    import re
+    from pathlib import Path
+    root = Path(__file__).resolve().parent.parent
+    offenders = []
+    for py in list((root / "pamrofi").glob("*.py")) + list((root / "scripts").glob("*.py")):
+        for i, line in enumerate(py.read_text(encoding="utf-8").splitlines(), 1):
+            if re.search(r"\.map\(\s*self\.", line):
+                offenders.append(f"{py.name}:{i}")
+    assert not offenders, offenders
